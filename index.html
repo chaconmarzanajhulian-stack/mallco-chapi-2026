@@ -193,22 +193,31 @@ function der(m){
   g.ev.forEach(e=>{const r=R[e.s];
     if(e.t=='pts'){r.pts+=e.v;r.q[e.q]=(r.q[e.q]||0)+e.v;r.pl[e.p].pts+=e.v}
     else if(e.t=='foul'){if(e.k=='C'||e.k=='B')r.c[e.k]++;else{const p=r.pl[e.p];if(e.k=='P')p.f++;else if(e.k=='T')p.t++;else if(e.k=='U')p.u++;else p.d++;r.tf[e.q]=(r.tf[e.q]||0)+1}}
+    else if(e.t=='ft'){if(e.ok){r.pts+=1;r.q[e.q]=(r.q[e.q]||0)+1;r.pl[e.p].pts+=1}}
     else if(e.t=='to'){const h=hk(e.q);r.to[h]=(r.to[h]||0)+1}
     else if(e.t=='sub'){r.pl[e.o].on=0;r.pl[e.i].on=1;r.pl[e.i].ent=1}});
   for(const s of['a','b']){const r=R[s];Object.values(r.pl).forEach(p=>{p.out=p.d>0||p.f+p.t+p.u>=5||p.t+p.u>=2});r.cdq=r.c.C>=2||r.c.C+r.c.B>=3}
   return R}
 function ev(id,e){const g=LG(G(id));msg='';pend=null;g.ev.push(Object.assign({q:g.q,c:Math.ceil(g.clk)},e));save()}
-const pts=(id,s,p,v)=>ev(id,{t:'pts',s,p,v}),foul=(id,s,p,k)=>ev(id,{t:'foul',s,p,k}),sub=(id,s,o,i)=>ev(id,{t:'sub',s,o,i});
+const pts=(id,s,p,v)=>ev(id,{t:'pts',s,p,v}),sub=(id,s,o,i)=>ev(id,{t:'sub',s,o,i});
+function foul(id,s,p,k){ftp={s:s=='a'?'b':'a',n:null,p:null,i:0,src:k,by:s};mtab='c';ev(id,{t:'foul',s,p,k})}
+function ftShot(id,ok){const f=ftp,e={t:'ft',s:f.s,p:f.p,ok:ok?1:0,i:f.i+1,of:f.n};f.i++;if(f.i>=f.n)ftp=null;ev(id,e)}
+function ftPanel(m){
+  if(!ftp)return '';const f=ftp,g=LG(m),R=der(m),id=m.id,n=f.by?(R[f.by].tf[g.q]||0):0;
+  const hint=f.src=='T'||f.src=='C'||f.src=='B'?'Falta técnica: 1 tiro libre.':f.src=='U'||f.src=='D'?'Antideportiva/descalificante: 2 tiros libres y posesión.':f.src=='P'?(n>=5?'El equipo está en bonus: 2 tiros libres.':'Solo hay tiros si fue falta en acto de tiro: 2 o 3 (1 si la canasta fue válida).'):'';
+  if(f.n===null)return `<div class=card><b>Tiros libres para ${tn(m[f.s])}</b><div class=row>${[1,2,3].map(k=>`<button class=btn onclick="ftp.n=${k};render()">${k} tiro${k>1?'s':''}</button>`).join('')}<button class="btn g" onclick="ftp=null;render()">Sin tiros</button></div><p class=mu>${hint}</p></div>`;
+  if(!f.p)return `<div class=card><b>¿Quién tira?</b><div class=row>${Object.keys(g.t[f.s].p).filter(i=>R[f.s].pl[i].on).map(i=>`<button class=btn onclick="ftp.p='${i}';render()">${pn(m,f.s,i)}</button>`).join('')}<button class="btn g" onclick="ftp=null;render()">Cancelar</button></div></div>`;
+  return `<div class=card><b>${pn(m,f.s,f.p)} · tiro libre ${f.i+1} de ${f.n}</b><div class=row><button class=btn onclick="ftShot('${id}',1)">✔ Convertido</button><button class="btn r" onclick="ftShot('${id}',0)">✘ Fallado</button><button class="btn g" onclick="ftp=null;render()">Cancelar</button></div></div>`}
 function tout(id,s){const m=G(id),g=LG(m),r=der(m)[s];
   if((r.to[hk(g.q)]||0)>=toLim(g.q)){msg='⚠ Sin tiempos muertos disponibles en este período.';return render()}
   if(g.q==4&&g.clk<=120&&g.ev.filter(e=>e.t=='to'&&e.s==s&&e.q==4&&e.c<=120).length>=2){msg='⚠ Máximo 2 tiempos muertos en los últimos 2 minutos.';return render()}
   stopC(g,1);ev(id,{t:'to',s})}
-function undo(id){if(confirm('¿Deshacer la última jugada?')){LG(G(id)).ev.pop();save()}}
+function undo(id){if(confirm('¿Deshacer la última jugada?')){LG(G(id)).ev.pop();ftp=null;save()}}
 function stopC(g,q){g.run=false;clearInterval(tm);if(!q)save()}
 function clk(id){const g=LG(G(id));if(g.done)return;if(g.run)return stopC(g);if(g.clk<=0)return;g.run=true;t0=Date.now();clearInterval(tm);tm=setInterval(()=>tick(g),200);render()}
-function tick(g){const n=Date.now(),d=(n-t0)/1000;t0=n;g.clk=Math.max(0,g.clk-d);g.sc=Math.max(0,g.sc-d);
-  const a=document.getElementById('ck'),b=document.getElementById('sk');if(a)a.textContent=fm(g.clk);if(b)b.textContent=Math.ceil(g.sc);
-  if(g.clk<=0||g.sc<=0){stopC(g,1);try{navigator.vibrate(600)}catch(e){}msg=g.clk<=0?'⏱ Fin del período.':'⏱ Violación de 24 segundos.';save()}}
+function tick(g){const n=Date.now(),d=(n-t0)/1000;t0=n;g.clk=Math.max(0,g.clk-d);
+  const a=document.getElementById('ck');if(a)a.textContent=fm(g.clk);
+  if(g.clk<=0){stopC(g,1);try{navigator.vibrate(600)}catch(e){}msg='⏱ Fin del período.';save()}}
 function rs(id,v){const g=LG(G(id));g.sc=v==14&&g.sc>=14?g.sc:v;render()}
 function adj(id){const g=LG(G(id)),v=prompt('Tiempo restante (min:seg)',fm(g.clk));if(!v)return;const[a,b]=v.split(':'),x=(+a)*60+(+b||0);if(isNaN(x)||x<0||x>600)return;g.clk=x;save()}
 function arrow(id,v){LG(G(id)).arrow=v;save()}
@@ -222,15 +231,15 @@ function fin_(id){const m=G(id),g=LG(m),R=der(m);
   stopC(g,1);m.sa=R.a.pts;m.sb=R.b.pts;m.wo=null;g.done=true;
   for(const s of['a','b'])Object.keys(R[s].pl).forEach(i=>{if(R[s].pl[i].ent){const p=T(m[s]).players.find(x=>x.id==i);if(p&&!p.hab){p.hab=true;p.hm=m.id}}});save()}
 function reab(id){if(!confirm('¿Reabrir el partido? El resultado se borra de la tabla hasta finalizar de nuevo.'))return;const m=G(id);LG(m).done=false;m.sa=null;m.sb=null;save()}
-function evTxt(m,e){const t=tn(m[e.s]),w=e.t=='pts'?`+${e.v} ${pn(m,e.s,e.p)}`:e.t=='foul'?`Falta ${e.k} ${e.p?pn(m,e.s,e.p):'(entrenador)'}`:e.t=='to'?'Tiempo muerto':`Cambio: sale ${pn(m,e.s,e.o)}, entra ${pn(m,e.s,e.i)}`;return `${QL(e.q)} ${fm(e.c)} · ${t} · ${w}`}
-let mtab='c';
+function evTxt(m,e){const t=tn(m[e.s]),w=e.t=='pts'?`+${e.v} ${pn(m,e.s,e.p)}${e.ft?' (tiro libre)':''}`:e.t=='ft'?`Tiro libre ${e.i}/${e.of} ${e.ok?'convertido':'fallado'} · ${pn(m,e.s,e.p)}`:e.t=='foul'?`Falta ${e.k} ${e.p?pn(m,e.s,e.p):'(entrenador)'}`:e.t=='to'?'Tiempo muerto':`Cambio: sale ${pn(m,e.s,e.o)}, entra ${pn(m,e.s,e.i)}`;return `${QL(e.q)} ${fm(e.c)} · ${t} · ${w}`}
+let mtab='c',ftp=null;
 const ZON=(x,y)=>{const bx=x<140?15.75:264.25,dy=y-75;return Math.hypot(x-bx,dy)>67.5||Math.abs(dy)>66?3:2};
 function court(e,id){
   const m=G(id),g=LG(m);if(g.done)return;
   if(!pend||pend.k!='sel'){msg='⚠ Primero toca el jugador que anotó.';return render()}
   const r=e.currentTarget.getBoundingClientRect(),x=Math.round((e.clientX-r.left)/r.width*280),y=Math.round((e.clientY-r.top)/r.height*150);
   ev(id,{t:'pts',s:pend.s,p:pend.p,v:ZON(x,y),x,y})}
-function tl(id){if(!pend){msg='⚠ Primero toca un jugador.';return render()}ev(id,{t:'pts',s:pend.s,p:pend.p,v:1,ft:1})}
+function tls(){if(!pend){msg='⚠ Primero toca un jugador.';return render()}ftp={s:pend.s,n:null,p:pend.p,i:0};pend=null;render()}
 function mk_(k){if(!pend){msg='⚠ Primero toca un jugador.';return render()}pend.k=k;render()}
 function fix(id){const g=LG(G(id)),e=g.ev[g.ev.length-1];if(e&&e.t=='pts'&&!e.ft){e.v=e.v==3?2:3;save()}}
 const crt=m=>`<svg class=ct viewBox="0 0 280 150" onpointerdown="court(event,mesaId)"><rect width=280 height=150 fill="#2a1d0d"/><g fill=none stroke="#e0b030" stroke-width=1.2 opacity=.9><rect x=1 y=1 width=278 height=148 /><line x1=140 y1=0 x2=140 y2=150 /><circle cx=140 cy=75 r=18 /><rect x=0 y=50.5 width=58 height=49 /><rect x=222 y=50.5 width=58 height=49 /><circle cx=58 cy=75 r=18 /><circle cx=222 cy=75 r=18 /><path d="M0,9 L29.9,9 A67.5,67.5 0 0 1 29.9,141 L0,141" /><path d="M280,9 L250.1,9 A67.5,67.5 0 0 0 250.1,141 L280,141" /><line x1=12 y1=66 x2=12 y2=84 /><line x1=268 y1=66 x2=268 y2=84 /><circle cx=15.75 cy=75 r=2.25 /><circle cx=264.25 cy=75 r=2.25 /></g>${LG(m).ev.filter(e=>e.t=='pts'&&e.x!=null).slice(-40).map(e=>`<circle cx=${e.x} cy=${e.y} r=3 fill="${e.s=='a'?'#e0b030':'#fff'}" stroke="#000" stroke-width=.6 />`).join('')}</svg>`;
@@ -244,8 +253,8 @@ function pan(m){
   if(pend.k=='s'){const bn=Object.keys(t.p).filter(b=>!R[s].pl[b].on&&!R[s].pl[b].out);return `<div class="card row">Sale ${pn(m,s,i)}. Entra: ${bn.map(b=>`<button class=btn onclick="sub('${id}','${s}','${i}','${b}')">${pn(m,s,b)}</button>`).join('')||'<span class=mu>Sin banca disponible</span>'}</div>`}
   return `<p class=mu style="text-align:center">Elegido: <b>${pn(m,s,i)}</b> · toca la cancha (2 o 3 puntos automático) o usa Tiro libre, Falta o Cambio.</p>`}
 function stats(m,R,g){
-  return ['a','b'].map(s=>{const c={};g.ev.filter(e=>e.s==s&&e.t=='pts').forEach(e=>{const x=c[e.p]=c[e.p]||{d:0,t:0,l:0};if(e.ft)x.l++;else if(e.v==3)x.t++;else x.d++});
-    return `<div class=card><h3>${tn(m[s])} · ${R[s].pts} pts</h3><div class=tw><table><tr><th>#</th><th>Jugador</th><th>PTS</th><th>Dobles</th><th>Triples</th><th>TL</th><th>Faltas</th></tr>${Object.keys(g.t[s].p).sort((a,b)=>g.t[s].p[a].n-g.t[s].p[b].n).map(i=>{const p=R[s].pl[i],x=c[i]||{d:0,t:0,l:0};return `<tr><td>${g.t[s].p[i].n}</td><td>${E((T(m[s]).players.find(y=>y.id==i)||{}).n)}</td><td><b>${p.pts}</b></td><td>${x.d}</td><td>${x.t}</td><td>${x.l}</td><td>${p.f+p.t+p.u+p.d}</td></tr>`}).join('')}</table></div></div>`}).join('')}
+  return ['a','b'].map(s=>{const c={};g.ev.filter(e=>e.s==s&&(e.t=='pts'||e.t=='ft')).forEach(e=>{const x=c[e.p]=c[e.p]||{d:0,t:0,l:0,a:0};if(e.t=='ft'){x.a++;if(e.ok)x.l++}else if(e.ft){x.a++;x.l++}else if(e.v==3)x.t++;else x.d++});
+    return `<div class=card><h3>${tn(m[s])} · ${R[s].pts} pts</h3><div class=tw><table><tr><th>#</th><th>Jugador</th><th>PTS</th><th>Dobles</th><th>Triples</th><th>TL</th><th>Faltas</th></tr>${Object.keys(g.t[s].p).sort((a,b)=>g.t[s].p[a].n-g.t[s].p[b].n).map(i=>{const p=R[s].pl[i],x=c[i]||{d:0,t:0,l:0,a:0};return `<tr><td>${g.t[s].p[i].n}</td><td>${E((T(m[s]).players.find(y=>y.id==i)||{}).n)}</td><td><b>${p.pts}</b></td><td>${x.d}</td><td>${x.t}</td><td>${x.l}/${x.a}</td><td>${p.f+p.t+p.u+p.d}</td></tr>`}).join('')}</table></div></div>`}).join('')}
 function otros(m,R,g){
   const id=m.id,L=g.done;
   return ['a','b'].map(s=>{const r=R[s],tm_=T(m[s]),left=Math.max(0,toLim(g.q)-(r.to[hk(g.q)]||0));
@@ -264,10 +273,10 @@ function mesa(m){
   if(mtab=='h')body=`<div class=card>${g.ev.slice().reverse().map(e=>`<div class=m>${evTxt(m,e)}</div>`).join('')||'<p class=mu>Aún sin jugadas.</p>'}</div>`;
   else if(mtab=='e')body=stats(m,R,g);
   else if(mtab=='o')body=otros(m,R,g);
-  else body=`<div class=mc>${col('a')}${crt(m)}${col('b')}</div>${L?'':pan(m)}
-    ${L?`<div class=row><span class="b ok">Partido finalizado y enviado a la tabla</span></div>`:`<div class=row style="justify-content:center"><button class="btn g" onclick="tl('${id}')">Tiro libre +1</button><button class="btn g" onclick="mk_('f')">Falta</button><button class="btn g" onclick="mk_('s')">Cambio</button><button class="btn g" onclick="fix('${id}')">Corregir 2↔3</button><button class="btn r" onclick="undo('${id}')">↶ Deshacer</button><button class="btn r" onclick="fin_('${id}')">Finalizar acta</button></div>`}`;
+  else body=`<div class=mc>${col('a')}${crt(m)}${col('b')}</div>${L?'':ftp?ftPanel(m):pan(m)}
+    ${L?`<div class=row><span class="b ok">Partido finalizado y enviado a la tabla</span></div>`:`<div class=row style="justify-content:center"><button class="btn g" onclick="tls()">Tiros libres</button><button class="btn g" onclick="mk_('f')">Falta</button><button class="btn g" onclick="mk_('s')">Cambio</button><button class="btn g" onclick="fix('${id}')">Corregir 2↔3</button><button class="btn r" onclick="undo('${id}')">↶ Deshacer</button><button class="btn r" onclick="fin_('${id}')">Finalizar acta</button></div>`}`;
   return `<a class=back onclick="mesaId=null;selM=null;render()">← Calendario</a>
-  <div class=card><div class=sbd>${sb('a')}<div><div class=mu>${QL(g.q)}${L?' · FINAL':''}</div><div id=ck class=clk>${fm(g.clk)}</div><div class=mu>24 s: <b id=sk>${Math.ceil(g.sc)}</b></div>${L?'':`<div class=row style="justify-content:center"><button class=btn onclick="clk('${id}')">${g.run?'⏸':'▶'}</button><button class="btn g" onclick="rs('${id}',24)">24</button><button class="btn g" onclick="rs('${id}',14)">14</button></div>`}</div>${sb('b')}</div>
+  <div class=card><div class=sbd>${sb('a')}<div><div class=mu>${QL(g.q)}${L?' · FINAL':''}</div><div id=ck class=clk onclick="adj('${id}')" style="cursor:pointer">${fm(g.clk)}</div><div class=mu>toca el reloj para editarlo</div>${L?'':`<div class=row style="justify-content:center"><button class=btn onclick="clk('${id}')">${g.run?'⏸':'▶'}</button><button class="btn g" onclick="adj('${id}')">✎ Editar</button></div>`}</div>${sb('b')}</div>
   <p class=mu style="text-align:center;margin:4px 0">${qs.join(' · ')}</p></div>
   <div class=tabs>${tabs.map(x=>`<button class="${mtab==x[0]?'on':''}" onclick="mtab='${x[0]}';pend=null;render()">${x[1]}</button>`).join('')}</div>${body}`}
 let selM=null;
