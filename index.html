@@ -136,6 +136,7 @@ function equipo(t){
   return `<a class=back onclick="selT=null;render()">← Equipos</a>
   <div class=card><div class=row>${av(t.logo,72,'🛡')}<div><h3 style="margin:0">${E(t.name)}</h3><p class=mu style="margin:0">Delegado de equipo: ${E(t.del)||'—'}</p></div></div>${org?`<button class="btn g" onclick="pick('t','${t.id}')">📷 ${t.logo?'Cambiar':'Subir'} escudo</button>`:''}
   ${t.obs?`<p class=pre><b>Observación:</b> ${E(t.obs)}</p>`:''}
+  <p class=mu>Habilitado = el jugador ya pisó la cancha en un partido (se marca solo). En la vuelta solo juegan los habilitados.</p>
   ${t.players.map(p=>`<div class=li style="cursor:default"><span class=row style="margin:0">${av(p.foto,44,'👤')}${E(p.n)}${org?`<button class="btn g" onclick="pick('p','${t.id}','${p.id}')">📷</button>`:''}</span><span>${org?`<button class="btn g" onclick="togP('${t.id}','${p.id}')">${p.hab?'Quitar hab.':'Habilitar'}</button> <button class="btn r" onclick="delP('${t.id}','${p.id}')">✕</button> `:''}<span class="b ${p.hab?'ok':'no'}">${p.hab?'Habilitado':'No habilitado'}</span></span></div>`).join('')||'<p class=mu>Sin jugadores.</p>'}</div>
   ${org?`<div class=card><h3>Agregar jugador</h3><div class=row><input id=pn placeholder="Nombre del jugador"><label><input id=ph type=checkbox> Habilitado</label><button class=btn onclick="addP('${t.id}')">Agregar</button></div></div>
   <div class=card><h3>Editar equipo</h3><div class=row><input value="${E(t.name)}" onchange="T('${t.id}').name=this.value;save()"><input value="${E(t.del)}" placeholder="Delegado" onchange="T('${t.id}').del=this.value;save()"></div>
@@ -197,18 +198,28 @@ function chk(m){
     if(!t.cap||!t.p[t.cap])e.push(nm+': falta elegir capitán');
   }
   return e}
+function newP(id,s){
+  const m=G(id),t=GM(m).t[s],tm=T(m[s]),nm=val('nn-'+s).trim(),nu=val('nu-'+s);
+  if(!nm)return;
+  if(m.leg=='vuelta'){msg='⚠ En la vuelta no se pueden agregar jugadores nuevos.';return render()}
+  if(Object.keys(t.p).length>=12){msg='⚠ Máximo 12 jugadores por equipo.';return render()}
+  if(tm.players.some(p=>p.n.trim().toLowerCase()==nm.toLowerCase())){msg='⚠ Ese jugador ya está en la lista del equipo.';return render()}
+  const p={id:uid(),n:nm,hab:false};tm.players.push(p);
+  t.p[p.id]={n:nu===''?'':Math.max(0,Math.min(99,Math.round(+nu))),st:0};msg='';save()}
 function lock(id,v){
   const m=G(id);
   if(v){const e=chk(m);if(e.length){alert('Falta completar:\n\n• '+e.join('\n• '));return}}
+  if(v)for(const s of['a','b']){const t=GM(m).t[s];Object.keys(t.p).filter(i=>t.p[i].st).forEach(i=>{const p=T(m[s]).players.find(x=>x.id==i);if(p&&!p.hab){p.hab=true;p.hm=m.id}})}
   GM(m).locked=v;save()}
 function teamPanel(m,s){
   const g=GM(m),t=g.t[s],tm=T(m[s]),ro=!org||g.locked,n=Object.keys(t.p).length,st=Object.values(t.p).filter(x=>x.st).length;
   const pl=ro?tm.players.filter(p=>t.p[p.id]).sort((a,b)=>t.p[a.id].n-t.p[b.id].n):tm.players;
   const rows=pl.map(p=>{const x=t.p[p.id];
     if(ro)return `<div class=li style="cursor:default"><span class=row style="margin:0">${av(p.foto,36,'👤')}<b>#${x.n}</b> ${E(p.n)} ${t.cap==p.id?'<span class="b ok">Capitán</span>':''}</span>${x.st?'<span class="b ok">Titular</span>':'<span class=mu>Banca</span>'}</div>`;
-    return `<div class=m><div class=row><label><input type=checkbox ${x?'checked':''} ${!p.hab&&!x?'disabled':''} onchange="cv('${m.id}','${s}','${p.id}')"> ${av(p.foto,32,'👤')} ${E(p.n)}</label>${p.hab?'':'<span class="b no">No habilitado</span>'}</div>
+    return `<div class=m><div class=row><label><input type=checkbox ${x?'checked':''} ${m.leg=='vuelta'&&!p.hab&&!x?'disabled':''} onchange="cv('${m.id}','${s}','${p.id}')"> ${av(p.foto,32,'👤')} ${E(p.n)}</label>${p.hab?'':`<span class="b no">${m.leg=='vuelta'?'No habilitado: no puede jugar la vuelta':'Aún sin pisar cancha'}</span>`}</div>
     ${x?`<div class=row>N.º <input class=sc type=number min=0 max=99 value="${x.n}" onchange="cf('${m.id}','${s}','${p.id}','n',this.value)"><label><input type=checkbox ${x.st?'checked':''} onchange="cf('${m.id}','${s}','${p.id}','st',this.checked)"> Titular</label><label><input type=radio name="cap${s}" ${t.cap==p.id?'checked':''} onchange="cf('${m.id}','${s}','${p.id}','cap')"> Capitán</label></div>`:''}</div>`}).join('');
   return `<div class=card><h3>${E(tm.name)}</h3><p class=mu>Convocados ${n}/12 · Titulares ${st}/5</p>${rows||'<p class=mu>Sin jugadores.</p>'}
+  ${ro?'':m.leg=='vuelta'?'<p class=mu>En la vuelta no se pueden agregar jugadores nuevos.</p>':`<h3>Jugador nuevo (llegó y no está en la lista)</h3><div class=row><input id="nn-${s}" placeholder="Nombre del jugador"><input id="nu-${s}" type=number min=0 max=99 class=sc placeholder="N.º"><button class=btn onclick="newP('${m.id}','${s}')">Agregar al equipo y al partido</button></div>`}
   ${ro?`<p><b>Entrenador:</b> ${E(t.dt)||'—'} · <b>Asistente:</b> ${E(t.at)||'—'}</p>`:`<div class=row><input placeholder="Entrenador" value="${E(t.dt)}" onchange="tf('${m.id}','${s}','dt',this.value)"><input placeholder="Asistente" value="${E(t.at)}" onchange="tf('${m.id}','${s}','at',this.value)"></div>`}</div>`}
 function convoc(m){
   const g=GM(m),ro=!org||g.locked;
