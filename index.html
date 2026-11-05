@@ -43,9 +43,10 @@ tr.top1 td{background:#2a210a}tr.top1 td:nth-child(2){color:var(--gold2);font-we
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 12px}.stat{background:var(--card2);border:1px solid var(--bd);border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-size:1.15rem;color:var(--gold2)}.stat span{font-size:.75rem;color:var(--mu)}
 .sc{width:62px}.sm{width:110px}
 a.back{display:inline-block;cursor:pointer;color:var(--gold);padding:6px 0}
+.av{display:inline-grid;place-items:center;border-radius:50%;object-fit:cover;background:var(--card2);border:1px solid var(--gd);flex:none;overflow:hidden}
 footer{margin-top:30px;text-align:center;color:var(--mu);font-size:.8rem}
 </style>
-</head></head><body><div id="app"></div>
+</head></head><body><div id="app"></div><input id="fi" type="file" accept="image/*" hidden onchange="up(this)">
 <script>
 const CATS={m:'Masculino',f:'Femenino',n:'Niños'};
 const mk=(i,c)=>({obj:'',extra:'',ins:i,c1:c,teams:[],matches:[],pay:{},fines:{}});
@@ -127,19 +128,34 @@ function inicio(){
 function equipos(){
   const c=C();
   if(selT&&T(selT))return equipo(T(selT));
-  return `<div class=card>${c.teams.map(t=>`<div class=li onclick="selT='${t.id}';render()"><div><b>${E(t.name)}</b><div class=mu>Delegado: ${E(t.del)||'—'}</div></div><span class=mu>${t.players.length} jug. ›</span></div>`).join('')||'<p class=mu>Sin equipos registrados.</p>'}</div>
+  return `<div class=card>${c.teams.map(t=>`<div class=li onclick="selT='${t.id}';render()"><div class=row style="margin:0">${av(t.logo,40,'🛡')}<div><b>${E(t.name)}</b><div class=mu>Delegado: ${E(t.del)||'—'}</div></div></div><span class=mu>${t.players.length} jug. ›</span></div>`).join('')||'<p class=mu>Sin equipos registrados.</p>'}</div>
   ${org?`<div class=card><h3>Agregar equipo</h3><div class=row><input id=tnm placeholder="Nombre del equipo"><input id=tdl placeholder="Delegado"><button class=btn onclick="addTeam()">Agregar</button></div></div>`:''}`;
 }
 function addTeam(){const n=val('tnm').trim();if(!n)return;C().teams.push({id:uid(),name:n,del:val('tdl'),obs:'',players:[]});save()}
 function equipo(t){
   return `<a class=back onclick="selT=null;render()">← Equipos</a>
-  <div class=card><h3>${E(t.name)}</h3><p class=mu>Delegado de equipo: ${E(t.del)||'—'}</p>
+  <div class=card><div class=row>${av(t.logo,72,'🛡')}<div><h3 style="margin:0">${E(t.name)}</h3><p class=mu style="margin:0">Delegado de equipo: ${E(t.del)||'—'}</p></div></div>${org?`<button class="btn g" onclick="pick('t','${t.id}')">📷 ${t.logo?'Cambiar':'Subir'} escudo</button>`:''}
   ${t.obs?`<p class=pre><b>Observación:</b> ${E(t.obs)}</p>`:''}
-  ${t.players.map(p=>`<div class=li style="cursor:default"><span>${E(p.n)}</span><span>${org?`<button class="btn g" onclick="togP('${t.id}','${p.id}')">${p.hab?'Quitar hab.':'Habilitar'}</button> <button class="btn r" onclick="delP('${t.id}','${p.id}')">✕</button> `:''}<span class="b ${p.hab?'ok':'no'}">${p.hab?'Habilitado':'No habilitado'}</span></span></div>`).join('')||'<p class=mu>Sin jugadores.</p>'}</div>
+  ${t.players.map(p=>`<div class=li style="cursor:default"><span class=row style="margin:0">${av(p.foto,44,'👤')}${E(p.n)}${org?`<button class="btn g" onclick="pick('p','${t.id}','${p.id}')">📷</button>`:''}</span><span>${org?`<button class="btn g" onclick="togP('${t.id}','${p.id}')">${p.hab?'Quitar hab.':'Habilitar'}</button> <button class="btn r" onclick="delP('${t.id}','${p.id}')">✕</button> `:''}<span class="b ${p.hab?'ok':'no'}">${p.hab?'Habilitado':'No habilitado'}</span></span></div>`).join('')||'<p class=mu>Sin jugadores.</p>'}</div>
   ${org?`<div class=card><h3>Agregar jugador</h3><div class=row><input id=pn placeholder="Nombre del jugador"><label><input id=ph type=checkbox> Habilitado</label><button class=btn onclick="addP('${t.id}')">Agregar</button></div></div>
   <div class=card><h3>Editar equipo</h3><div class=row><input value="${E(t.name)}" onchange="T('${t.id}').name=this.value;save()"><input value="${E(t.del)}" placeholder="Delegado" onchange="T('${t.id}').del=this.value;save()"></div>
   <textarea placeholder="Observación" onchange="T('${t.id}').obs=this.value;save()">${E(t.obs)}</textarea>
   <button class="btn r" onclick="if(confirm('¿Eliminar equipo y sus partidos?')){delTeam('${t.id}')}">Eliminar equipo</button></div>`:''}`;
+}
+const av=(id,z,ph)=>id?`<img class=av style="width:${z}px;height:${z}px" src="/api/photo/${id}" alt="" loading=lazy>`:`<span class=av style="width:${z}px;height:${z}px;font-size:${z*.5}px">${ph}</span>`;
+let tgt=null;
+function pick(k,t,p){tgt={k,t,p};document.getElementById('fi').click()}
+function shrink(f,m){return new Promise((ok,no)=>{const i=new Image();i.onload=()=>{const k=Math.min(1,m/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=Math.round(i.width*k);c.height=Math.round(i.height*k);c.getContext('2d').drawImage(i,0,0,c.width,c.height);c.toBlob(b=>b?ok(b):no(),'image/jpeg',.78)};i.onerror=no;i.src=URL.createObjectURL(f)})}
+async function up(inp){
+  const f=inp.files[0];inp.value='';if(!f||!tgt)return;
+  try{
+    const b=await shrink(f,tgt.k=='t'?400:480),id=uid()+Date.now().toString(36);
+    const r=await fetch('/api/photo/'+id,{method:'PUT',headers:{'x-pw':PW,'content-type':'image/jpeg'},body:b});if(!r.ok)throw 0;
+    const t=T(tgt.t),o=tgt.k=='t'?t:t.players.find(x=>x.id==tgt.p),old=tgt.k=='t'?o.logo:o.foto;
+    if(tgt.k=='t')o.logo=id;else o.foto=id;
+    if(old)fetch('/api/photo/'+old,{method:'DELETE',headers:{'x-pw':PW}}).catch(()=>{});
+    msg='';save();
+  }catch(e){msg='⚠ No se pudo subir la foto. Revisa tu conexión.';render()}
 }
 function addP(id){const n=val('pn').trim();if(!n)return;T(id).players.push({id:uid(),n,hab:document.getElementById('ph').checked});save()}
 function togP(t,p){const x=T(t).players.find(y=>y.id==p);x.hab=!x.hab;save()}

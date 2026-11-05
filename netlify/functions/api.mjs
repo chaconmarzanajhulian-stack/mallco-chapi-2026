@@ -33,6 +33,24 @@ export default async (req) => {
     await store.setJSON("state", data);
     return json({ ok: true });
   }
+  if (route.startsWith("photo/")) {
+    const id = route.slice(6);
+    if (!/^[a-z0-9]{6,40}$/.test(id)) return json({ ok: false }, 400);
+    const ph = getStore("fotos-mallco");
+    if (req.method === "GET") {
+      const d = await ph.get(id, { type: "arrayBuffer" });
+      if (!d) return json({ ok: false }, 404);
+      return new Response(d, { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=31536000, immutable" } });
+    }
+    if (!okPw(req.headers.get("x-pw"))) return json({ ok: false }, 401);
+    if (req.method === "PUT") {
+      const buf = await req.arrayBuffer();
+      if (buf.byteLength > 400000) return json({ ok: false }, 413);
+      await ph.set(id, buf);
+      return json({ ok: true });
+    }
+    if (req.method === "DELETE") { await ph.delete(id); return json({ ok: true }); }
+  }
   return json({ ok: false }, 404);
 };
 
