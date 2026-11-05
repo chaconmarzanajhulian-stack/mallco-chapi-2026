@@ -101,7 +101,7 @@ async function login(){
   catch(e){msg='Contraseña incorrecta o sin conexión.'}
   render();
 }
-function goCat(k){cat=k;tab='inicio';selT=null;enfT=null;msg='';render()}
+function goCat(k){cat=k;selM=null;tab='inicio';selT=null;enfT=null;msg='';render()}
 function tabsList(){
   const t=[['inicio','Inicio'],['equipos','Equipos'],['calendario','Calendario'],['tabla','Posiciones'],['enf','Enfrentamientos']].filter(x=>org||S.vis[x[0]]);
   if(org)t.push(['fin','Finanzas'],['cfg','Ajustes']);return t;
@@ -111,7 +111,7 @@ function catView(){
   const body={inicio,equipos,calendario,tabla,enf,fin,cfg}[tab];
   return `<a class=back onclick="cat=null;render()">← Inicio</a>
   <div class=top><img src="logo.jpg" alt=""><div><h2>Campeonato de Básquetbol</h2><div class=mu>Categoría ${CATS[cat]} · Mallco Chapi 2026</div></div></div>
-  <div class=tabs>${t.map(x=>`<button class="${x[0]==tab?'on':''}" onclick="tab='${x[0]}';selT=null;render()">${x[1]}</button>`).join('')}</div>
+  <div class=tabs>${t.map(x=>`<button class="${x[0]==tab?'on':''}" onclick="tab='${x[0]}';selT=null;selM=null;render()">${x[1]}</button>`).join('')}</div>
   ${msg?`<p class=mu>${msg}</p>`:''}${body?body():'<p class=mu>El organizador no habilitó secciones.</p>'}`;
 }
 
@@ -165,16 +165,63 @@ function delTeam(id){const c=C();c.teams=c.teams.filter(t=>t.id!=id);c.matches=c
 /* calendario */
 const done=m=>m.wo||(m.sa!=null&&m.sb!=null);
 function mRow(m){
+  const lk=m.game&&m.game.locked,cb=lk?`<button class="btn g" onclick="selM='${m.id}';render()">Ver convocatoria</button>`:'';
   const res=m.wo?`<span class="b no">W.O. ${tn(m.wo)}</span>`:done(m)?`<b>${m.sa} - ${m.sb}</b>`:'<span class=mu>vs</span>';
-  if(!org)return `<div class=m><span class=mu>${fd(m.date)}</span><br>${tn(m.a)} ${res} ${tn(m.b)}</div>`;
+  if(!org)return `<div class=m><span class=mu>${fd(m.date)}</span><br>${tn(m.a)} ${res} ${tn(m.b)}<div class=row>${cb}</div></div>`;
   const o=t=>`<option value="${t.id}">${E(t.name)}</option>`;
   return `<div class=m><div class=row><input type=date value="${m.date||''}" onchange="mu('${m.id}','date',this.value)"><b>${tn(m.a)}</b>
   <input class=sc type=number min=0 value="${m.sa??''}" onchange="mu('${m.id}','sa',this.value===''?null:+this.value)"> - <input class=sc type=number min=0 value="${m.sb??''}" onchange="mu('${m.id}','sb',this.value===''?null:+this.value)"><b>${tn(m.b)}</b></div>
-  <div class=row><select onchange="mu('${m.id}','wo',this.value||null)"><option value="">Sin W.O.</option><option value="${m.a}" ${m.wo==m.a?'selected':''}>W.O. ${tn(m.a)}</option><option value="${m.b}" ${m.wo==m.b?'selected':''}>W.O. ${tn(m.b)}</option></select>
+  <div class=row><button class="btn ${lk?'g':''}" onclick="selM='${m.id}';render()">${lk?'✔ Convocatoria':'Convocatoria'}</button><select onchange="mu('${m.id}','wo',this.value||null)"><option value="">Sin W.O.</option><option value="${m.a}" ${m.wo==m.a?'selected':''}>W.O. ${tn(m.a)}</option><option value="${m.b}" ${m.wo==m.b?'selected':''}>W.O. ${tn(m.b)}</option></select>
   <button class="btn r" onclick="C().matches=C().matches.filter(x=>x.id!='${m.id}');save()">Eliminar</button></div></div>`;
 }
+let selM=null;
+const G=id=>C().matches.find(m=>m.id==id);
+const GM=m=>m.game||(m.game={place:'',time:'',of:{r1:'',r2:'',r3:'',co:'',an:'',aa:'',cr:'',o24:''},t:{a:{p:{},cap:'',dt:'',at:''},b:{p:{},cap:'',dt:'',at:''}},locked:false});
+const OF={r1:'Árbitro principal',r2:'Árbitro 1',r3:'Árbitro 2',co:'Comisario',an:'Anotador',aa:'Asistente de anotador',cr:'Cronometrista',o24:'Operador de 24 s'};
+function cv(id,s,p){msg='';const t=GM(G(id)).t[s];if(t.p[p]){delete t.p[p];if(t.cap==p)t.cap=''}else{if(Object.keys(t.p).length>=12){msg='⚠ Máximo 12 jugadores por equipo.';return render()}t.p[p]={n:'',st:0}}save()}
+function cf(id,s,p,k,v){msg='';const t=GM(G(id)).t[s];
+  if(k=='cap')t.cap=p;
+  else if(k=='st'){if(v&&Object.values(t.p).filter(x=>x.st).length>=5){msg='⚠ Solo puede haber 5 titulares.';return render()}t.p[p].st=v?1:0}
+  else t.p[p].n=v===''?'':Math.max(0,Math.min(99,Math.round(+v)));
+  save()}
+function gf(id,k,v){const g=GM(G(id));if(k.includes('.')){const[a,b]=k.split('.');g[a][b]=v}else g[k]=v;save()}
+function tf(id,s,k,v){GM(G(id)).t[s][k]=v;save()}
+function chk(m){
+  const g=GM(m),e=[];
+  for(const s of['a','b']){
+    const t=g.t[s],ids=Object.keys(t.p),nm=T(m[s]).name,nums=ids.map(i=>t.p[i].n);
+    if(ids.length<5)e.push(nm+': mínimo 5 jugadores convocados');
+    if(nums.some(n=>n===''))e.push(nm+': falta número de camiseta');
+    if(new Set(nums).size<nums.length)e.push(nm+': números de camiseta repetidos');
+    if(ids.filter(i=>t.p[i].st).length!=5)e.push(nm+': deben marcarse exactamente 5 titulares');
+    if(!t.cap||!t.p[t.cap])e.push(nm+': falta elegir capitán');
+  }
+  return e}
+function lock(id,v){
+  const m=G(id);
+  if(v){const e=chk(m);if(e.length){alert('Falta completar:\n\n• '+e.join('\n• '));return}}
+  GM(m).locked=v;save()}
+function teamPanel(m,s){
+  const g=GM(m),t=g.t[s],tm=T(m[s]),ro=!org||g.locked,n=Object.keys(t.p).length,st=Object.values(t.p).filter(x=>x.st).length;
+  const pl=ro?tm.players.filter(p=>t.p[p.id]).sort((a,b)=>t.p[a.id].n-t.p[b.id].n):tm.players;
+  const rows=pl.map(p=>{const x=t.p[p.id];
+    if(ro)return `<div class=li style="cursor:default"><span class=row style="margin:0">${av(p.foto,36,'👤')}<b>#${x.n}</b> ${E(p.n)} ${t.cap==p.id?'<span class="b ok">Capitán</span>':''}</span>${x.st?'<span class="b ok">Titular</span>':'<span class=mu>Banca</span>'}</div>`;
+    return `<div class=m><div class=row><label><input type=checkbox ${x?'checked':''} ${!p.hab&&!x?'disabled':''} onchange="cv('${m.id}','${s}','${p.id}')"> ${av(p.foto,32,'👤')} ${E(p.n)}</label>${p.hab?'':'<span class="b no">No habilitado</span>'}</div>
+    ${x?`<div class=row>N.º <input class=sc type=number min=0 max=99 value="${x.n}" onchange="cf('${m.id}','${s}','${p.id}','n',this.value)"><label><input type=checkbox ${x.st?'checked':''} onchange="cf('${m.id}','${s}','${p.id}','st',this.checked)"> Titular</label><label><input type=radio name="cap${s}" ${t.cap==p.id?'checked':''} onchange="cf('${m.id}','${s}','${p.id}','cap')"> Capitán</label></div>`:''}</div>`}).join('');
+  return `<div class=card><h3>${E(tm.name)}</h3><p class=mu>Convocados ${n}/12 · Titulares ${st}/5</p>${rows||'<p class=mu>Sin jugadores.</p>'}
+  ${ro?`<p><b>Entrenador:</b> ${E(t.dt)||'—'} · <b>Asistente:</b> ${E(t.at)||'—'}</p>`:`<div class=row><input placeholder="Entrenador" value="${E(t.dt)}" onchange="tf('${m.id}','${s}','dt',this.value)"><input placeholder="Asistente" value="${E(t.at)}" onchange="tf('${m.id}','${s}','at',this.value)"></div>`}</div>`}
+function convoc(m){
+  const g=GM(m),ro=!org||g.locked;
+  const of=Object.keys(OF).map(k=>ro?`<div class=row><span class=mu>${OF[k]}:</span> ${E(g.of[k])||'—'}</div>`:`<div class=row><input placeholder="${OF[k]}" value="${E(g.of[k])}" onchange="gf('${m.id}','of.${k}',this.value)"></div>`).join('');
+  return `<a class=back onclick="selM=null;render()">← Calendario</a>
+  <div class=card><h3>${tn(m.a)} vs ${tn(m.b)}</h3><p class=mu>${m.leg=='ida'?'Ida':'Vuelta'} · ${fd(m.date)} ${g.locked?'<span class="b ok">Convocatoria cerrada</span>':'<span class="b no">En preparación</span>'}</p>
+  ${ro?`<p><b>Lugar:</b> ${E(g.place)||'—'} · <b>Hora:</b> ${E(g.time)||'—'}</p>`:`<div class=row><input placeholder="Lugar / cancha" value="${E(g.place)}" onchange="gf('${m.id}','place',this.value)"><input type=time value="${E(g.time)}" onchange="gf('${m.id}','time',this.value)"></div>`}
+  <h3>Árbitros y mesa de control</h3>${of}</div>
+  ${teamPanel(m,'a')}${teamPanel(m,'b')}
+  ${org?`<div class=card>${g.locked?`<button class="btn g" onclick="lock('${m.id}',false)">Reabrir convocatoria</button>`:`<button class=btn onclick="lock('${m.id}',true)">Cerrar convocatoria</button><p class=mu>Se revisa: mínimo 5 y máximo 12 jugadores, número de camiseta sin repetir, 5 titulares y un capitán.</p>`}</div>`:''}`}
 function mu(id,k,v){C().matches.find(m=>m.id==id)[k]=v;save()}
 function calendario(){
+  if(selM&&G(selM))return convoc(G(selM));
   const c=C(),o=c.teams.map(t=>`<option value="${t.id}">${E(t.name)}</option>`).join('');
   const sec=l=>{const ms=c.matches.filter(m=>m.leg==l).sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
     return `<div class=card><h3>${l=='ida'?'Partidos de ida':'Partidos de vuelta'}</h3>${ms.map(mRow).join('')||'<p class=mu>Sin partidos.</p>'}</div>`};
