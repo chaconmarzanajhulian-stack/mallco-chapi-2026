@@ -44,6 +44,7 @@ tr.top1 td{background:#2a210a}tr.top1 td:nth-child(2){color:var(--gold2);font-we
 .sc{width:62px}.sm{width:110px}
 a.back{display:inline-block;cursor:pointer;color:var(--gold);padding:6px 0}
 .av{display:inline-grid;place-items:center;border-radius:50%;object-fit:cover;background:var(--card2);border:1px solid var(--gd);flex:none;overflow:hidden}
+.sbd{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;text-align:center}.sbd .n{font-size:2.6rem;font-weight:800;color:var(--gold2)}.clk{font-size:2.6rem;font-weight:800;font-variant-numeric:tabular-nums}
 footer{margin-top:30px;text-align:center;color:var(--mu);font-size:.8rem}
 </style>
 </head></head><body><div id="app"></div><input id="fi" type="file" accept="image/*" hidden onchange="up(this)">
@@ -175,6 +176,71 @@ function mRow(m){
   <div class=row><button class="btn ${lk?'g':''}" onclick="selM='${m.id}';render()">${lk?'✔ Convocatoria':'Convocatoria'}</button><select onchange="mu('${m.id}','wo',this.value||null)"><option value="">Sin W.O.</option><option value="${m.a}" ${m.wo==m.a?'selected':''}>W.O. ${tn(m.a)}</option><option value="${m.b}" ${m.wo==m.b?'selected':''}>W.O. ${tn(m.b)}</option></select>
   <button class="btn r" onclick="C().matches=C().matches.filter(x=>x.id!='${m.id}');save()">Eliminar</button></div></div>`;
 }
+/* ===== MESA DE CONTROL ===== */
+let mesaId=null,pend=null,tm=null,t0=0;
+const LG=m=>{const g=GM(m);if(g.ev===undefined)Object.assign(g,{q:1,clk:600,sc:24,run:false,arrow:'',ev:[],done:false});return g};
+const fm=x=>{x=Math.max(0,Math.ceil(x));return Math.floor(x/60)+':'+String(x%60).padStart(2,'0')};
+const QL=q=>q<=4?'Q'+q:'TE'+(q-4),hk=q=>q<=2?'h1':q<=4?'h2':'o'+q,toLim=q=>q<=2?2:q<=4?3:1;
+const pn=(m,s,i)=>{const p=T(m[s]).players.find(x=>x.id==i),n=GM(m).t[s].p[i];return p?`#${n?n.n:''} ${E(p.n)}`:'—'};
+function der(m){
+  const g=LG(m),R={};
+  for(const s of['a','b']){const pl={};Object.keys(g.t[s].p).forEach(i=>{const st=g.t[s].p[i].st;pl[i]={pts:0,f:0,t:0,u:0,d:0,on:st,ent:st}});R[s]={pts:0,q:{},tf:{},to:{},c:{C:0,B:0},pl}}
+  g.ev.forEach(e=>{const r=R[e.s];
+    if(e.t=='pts'){r.pts+=e.v;r.q[e.q]=(r.q[e.q]||0)+e.v;r.pl[e.p].pts+=e.v}
+    else if(e.t=='foul'){if(e.k=='C'||e.k=='B')r.c[e.k]++;else{const p=r.pl[e.p];if(e.k=='P')p.f++;else if(e.k=='T')p.t++;else if(e.k=='U')p.u++;else p.d++;r.tf[e.q]=(r.tf[e.q]||0)+1}}
+    else if(e.t=='to'){const h=hk(e.q);r.to[h]=(r.to[h]||0)+1}
+    else if(e.t=='sub'){r.pl[e.o].on=0;r.pl[e.i].on=1;r.pl[e.i].ent=1}});
+  for(const s of['a','b']){const r=R[s];Object.values(r.pl).forEach(p=>{p.out=p.d>0||p.f+p.t+p.u>=5||p.t+p.u>=2});r.cdq=r.c.C>=2||r.c.C+r.c.B>=3}
+  return R}
+function ev(id,e){const g=LG(G(id));msg='';pend=null;g.ev.push(Object.assign({q:g.q,c:Math.ceil(g.clk)},e));save()}
+const pts=(id,s,p,v)=>ev(id,{t:'pts',s,p,v}),foul=(id,s,p,k)=>ev(id,{t:'foul',s,p,k}),sub=(id,s,o,i)=>ev(id,{t:'sub',s,o,i});
+function tout(id,s){const m=G(id),g=LG(m),r=der(m)[s];
+  if((r.to[hk(g.q)]||0)>=toLim(g.q)){msg='⚠ Sin tiempos muertos disponibles en este período.';return render()}
+  if(g.q==4&&g.clk<=120&&g.ev.filter(e=>e.t=='to'&&e.s==s&&e.q==4&&e.c<=120).length>=2){msg='⚠ Máximo 2 tiempos muertos en los últimos 2 minutos.';return render()}
+  stopC(g,1);ev(id,{t:'to',s})}
+function undo(id){if(confirm('¿Deshacer la última jugada?')){LG(G(id)).ev.pop();save()}}
+function stopC(g,q){g.run=false;clearInterval(tm);if(!q)save()}
+function clk(id){const g=LG(G(id));if(g.done)return;if(g.run)return stopC(g);if(g.clk<=0)return;g.run=true;t0=Date.now();clearInterval(tm);tm=setInterval(()=>tick(g),200);render()}
+function tick(g){const n=Date.now(),d=(n-t0)/1000;t0=n;g.clk=Math.max(0,g.clk-d);g.sc=Math.max(0,g.sc-d);
+  const a=document.getElementById('ck'),b=document.getElementById('sk');if(a)a.textContent=fm(g.clk);if(b)b.textContent=Math.ceil(g.sc);
+  if(g.clk<=0||g.sc<=0){stopC(g,1);try{navigator.vibrate(600)}catch(e){}msg=g.clk<=0?'⏱ Fin del período.':'⏱ Violación de 24 segundos.';save()}}
+function rs(id,v){const g=LG(G(id));g.sc=v==14&&g.sc>=14?g.sc:v;render()}
+function adj(id){const g=LG(G(id)),v=prompt('Tiempo restante (min:seg)',fm(g.clk));if(!v)return;const[a,b]=v.split(':'),x=(+a)*60+(+b||0);if(isNaN(x)||x<0||x>600)return;g.clk=x;save()}
+function arrow(id,v){LG(G(id)).arrow=v;save()}
+function nq(id){const m=G(id),g=LG(m),R=der(m);stopC(g,1);
+  if(g.q>=4&&R.a.pts!=R.b.pts){msg='El partido ya se puede finalizar (no hay empate).';return render()}
+  if(g.clk>0&&!confirm('Quedan '+fm(g.clk)+' en el reloj. ¿Terminar el período?'))return;
+  g.q++;g.clk=g.q<=4?600:300;g.sc=24;save()}
+function fin_(id){const m=G(id),g=LG(m),R=der(m);
+  if(R.a.pts==R.b.pts){msg='⚠ Hay empate: se juega tiempo extra.';return render()}
+  if(!confirm('¿Finalizar el partido '+R.a.pts+' - '+R.b.pts+'?'))return;
+  stopC(g,1);m.sa=R.a.pts;m.sb=R.b.pts;m.wo=null;g.done=true;
+  for(const s of['a','b'])Object.keys(R[s].pl).forEach(i=>{if(R[s].pl[i].ent){const p=T(m[s]).players.find(x=>x.id==i);if(p&&!p.hab){p.hab=true;p.hm=m.id}}});save()}
+function reab(id){if(!confirm('¿Reabrir el partido? El resultado se borra de la tabla hasta finalizar de nuevo.'))return;const m=G(id);LG(m).done=false;m.sa=null;m.sb=null;save()}
+function evTxt(m,e){const t=tn(m[e.s]),w=e.t=='pts'?`+${e.v} ${pn(m,e.s,e.p)}`:e.t=='foul'?`Falta ${e.k} ${e.p?pn(m,e.s,e.p):'(entrenador)'}`:e.t=='to'?'Tiempo muerto':`Cambio: sale ${pn(m,e.s,e.o)}, entra ${pn(m,e.s,e.i)}`;return `${QL(e.q)} ${fm(e.c)} · ${t} · ${w}`}
+function mt(m,s,R,g){
+  const r=R[s],t=g.t[s],tm_=T(m[s]),fq=r.tf[g.q]||0,toL=toLim(g.q)-(r.to[hk(g.q)]||0),L=g.done,id=m.id;
+  const ids=Object.keys(t.p),on=ids.filter(i=>r.pl[i].on),bn=ids.filter(i=>!r.pl[i].on);
+  const row=i=>{const p=r.pl[i],pe=pend&&pend.s==s&&pend.p==i,bench=bn.filter(b=>!r.pl[b].out);
+    return `<div class=m><div class=row><b>#${t.p[i].n}</b> ${E(tm_.players.find(x=>x.id==i)?.n)} <span class="b ${p.out?'no':'ok'}">${p.pts} pts · F${p.f+p.t+p.u+p.d}${p.out?' · FUERA, debe salir':''}</span></div>
+    ${L?'':`<div class=row>${[1,2,3].map(v=>`<button class=btn onclick="pts('${id}','${s}','${i}',${v})">+${v}</button>`).join('')}<button class="btn g" onclick="pend={s:'${s}',p:'${i}',k:'f'};render()">Falta</button><button class="btn g" onclick="pend={s:'${s}',p:'${i}',k:'s'};render()">⇄ Cambio</button></div>`}
+    ${pe&&pend.k=='f'?`<div class=row>${['P','T','U','D'].map(k=>`<button class="btn r" onclick="foul('${id}','${s}','${i}','${k}')">${k}</button>`).join('')}<button class="btn g" onclick="pend=null;render()">✕</button><span class=mu>P personal · T técnica · U antideportiva · D descalificante</span></div>`:''}
+    ${pe&&pend.k=='s'?`<div class=row>Entra: ${bench.map(b=>`<button class=btn onclick="sub('${id}','${s}','${i}','${b}')">#${t.p[b].n} ${E(tm_.players.find(x=>x.id==b)?.n)}</button>`).join('')||'<span class=mu>Sin banca</span>'}<button class="btn g" onclick="pend=null;render()">✕</button></div>`:''}</div>`};
+  return `<div class=card><h3>${E(tm_.name)} <span class="b ${fq>=4?'no':'ok'}">Faltas ${fq}${fq>=4?' · PENAL':''}</span></h3>
+  <div class=row><span class=mu>T. muertos: ${Math.max(0,toL)}</span>${L?'':`<button class="btn g" onclick="tout('${id}','${s}')">Tiempo muerto</button>`}<span class=mu>Entrenador C${r.c.C} B${r.c.B}${r.cdq?' · DESCALIFICADO':''}</span>${L?'':`<button class="btn g" onclick="foul('${id}','${s}','','C')">Técnica C</button><button class="btn g" onclick="foul('${id}','${s}','','B')">Técnica B</button>`}</div>
+  <h3>En cancha</h3>${on.map(row).join('')||'<p class=mu>Nadie en cancha.</p>'}
+  <h3>Banca</h3><div class=row>${bn.map(i=>`<span class="b ${r.pl[i].out?'no':'ok'}">#${t.p[i].n} ${E(tm_.players.find(x=>x.id==i)?.n)}${r.pl[i].out?' (fuera)':''}</span>`).join('')||'<span class=mu>—</span>'}</div>
+  ${L||m.leg=='vuelta'?'':`<div class=row><input id="nn-${s}" placeholder="Jugador nuevo"><input id="nu-${s}" type=number min=0 max=99 class=sc placeholder="N.º"><button class="btn g" onclick="newP('${id}','${s}')">+ Agregar</button></div>`}</div>`}
+function mesa(m){
+  const g=LG(m),R=der(m),L=g.done,id=m.id,qs=[];for(let q=1;q<=g.q;q++)qs.push(`${QL(q)} ${R.a.q[q]||0}-${R.b.q[q]||0}`);
+  return `<a class=back onclick="mesaId=null;selM=null;render()">← Calendario</a>
+  <div class=card><div class=sbd><div><div class=mu>${tn(m.a)}</div><div class=n>${R.a.pts}</div></div><div><div class=mu>${QL(g.q)}${L?' · FINAL':''}</div><div id=ck class=clk>${fm(g.clk)}</div><div class=mu>24 s: <b id=sk>${Math.ceil(g.sc)}</b></div></div><div><div class=mu>${tn(m.b)}</div><div class=n>${R.b.pts}</div></div></div>
+  <p class=mu style="text-align:center">${qs.join(' · ')}</p>
+  ${L?`<div class=row><span class="b ok">Partido finalizado y enviado a la tabla</span><button class="btn g" onclick="reab('${id}')">Reabrir</button></div>`:`<div class=row><button class=btn onclick="clk('${id}')">${g.run?'⏸ Parar reloj':'▶ Iniciar reloj'}</button><button class="btn g" onclick="rs('${id}',24)">24</button><button class="btn g" onclick="rs('${id}',14)">14</button><button class="btn g" onclick="adj('${id}')">Ajustar reloj</button></div>
+  <div class=row><span class=mu>Posesión (flecha):</span><button class="btn ${g.arrow=='a'?'':'g'}" onclick="arrow('${id}','a')">${tn(m.a)}</button><button class="btn ${g.arrow=='b'?'':'g'}" onclick="arrow('${id}','b')">${tn(m.b)}</button></div>
+  <div class=row><button class="btn g" onclick="nq('${id}')">Terminar período</button><button class="btn g" onclick="fin_('${id}')">Finalizar partido</button><button class="btn r" onclick="undo('${id}')">↶ Deshacer</button></div>`}</div>
+  ${mt(m,'a',R,g)}${mt(m,'b',R,g)}
+  <div class=card><h3>Últimas jugadas</h3>${g.ev.slice(-8).reverse().map(e=>`<div class=m>${evTxt(m,e)}</div>`).join('')||'<p class=mu>Aún sin jugadas.</p>'}</div>`}
 let selM=null;
 const G=id=>C().matches.find(m=>m.id==id);
 const GM=m=>m.game||(m.game={place:'',time:'',of:{r1:'',r2:'',r3:'',co:'',an:'',aa:'',cr:'',o24:''},t:{a:{p:{},cap:'',dt:'',at:''},b:{p:{},cap:'',dt:'',at:''}},locked:false});
@@ -207,6 +273,7 @@ function newP(id,s){
   const p={id:uid(),n:nm,hab:false};tm.players.push(p);
   t.p[p.id]={n:nu===''?'':Math.max(0,Math.min(99,Math.round(+nu))),st:0};msg='';save()}
 function lock(id,v){
+  if(!v&&G(id).game.ev&&G(id).game.ev.length){alert('El partido ya tiene jugadas registradas.');return}
   const m=G(id);
   if(v){const e=chk(m);if(e.length){alert('Falta completar:\n\n• '+e.join('\n• '));return}}
   if(v)for(const s of['a','b']){const t=GM(m).t[s];Object.keys(t.p).filter(i=>t.p[i].st).forEach(i=>{const p=T(m[s]).players.find(x=>x.id==i);if(p&&!p.hab){p.hab=true;p.hm=m.id}})}
@@ -229,10 +296,10 @@ function convoc(m){
   ${ro?`<p><b>Lugar:</b> ${E(g.place)||'—'} · <b>Hora:</b> ${E(g.time)||'—'}</p>`:`<div class=row><input placeholder="Lugar / cancha" value="${E(g.place)}" onchange="gf('${m.id}','place',this.value)"><input type=time value="${E(g.time)}" onchange="gf('${m.id}','time',this.value)"></div>`}
   <h3>Árbitros y mesa de control</h3>${of}</div>
   ${teamPanel(m,'a')}${teamPanel(m,'b')}
-  ${org?`<div class=card>${g.locked?`<button class="btn g" onclick="lock('${m.id}',false)">Reabrir convocatoria</button>`:`<button class=btn onclick="lock('${m.id}',true)">Cerrar convocatoria</button><p class=mu>Se revisa: mínimo 5 y máximo 12 jugadores, número de camiseta sin repetir, 5 titulares y un capitán.</p>`}</div>`:''}`}
+  ${org?`<div class=card>${g.locked?`<button class=btn onclick="mesaId='${m.id}';render()">▶ Mesa de control</button> <button class="btn g" onclick="lock('${m.id}',false)">Reabrir convocatoria</button>`:`<button class=btn onclick="lock('${m.id}',true)">Cerrar convocatoria</button><p class=mu>Se revisa: mínimo 5 y máximo 12 jugadores, número de camiseta sin repetir, 5 titulares y un capitán.</p>`}</div>`:''}`}
 function mu(id,k,v){C().matches.find(m=>m.id==id)[k]=v;save()}
 function calendario(){
-  if(selM&&G(selM))return convoc(G(selM));
+  if(selM&&G(selM))return selM==mesaId&&GM(G(selM)).locked?mesa(G(selM)):convoc(G(selM));
   const c=C(),o=c.teams.map(t=>`<option value="${t.id}">${E(t.name)}</option>`).join('');
   const sec=l=>{const ms=c.matches.filter(m=>m.leg==l).sort((a,b)=>(a.date||'9').localeCompare(b.date||'9'));
     return `<div class=card><h3>${l=='ida'?'Partidos de ida':'Partidos de vuelta'}</h3>${ms.map(mRow).join('')||'<p class=mu>Sin partidos.</p>'}</div>`};
